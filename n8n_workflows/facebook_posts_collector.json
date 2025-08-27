@@ -1,0 +1,416 @@
+{
+  "name": "facebook_posts_collector",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1
+            }
+          ]
+        },
+        "timezone": "Asia/Jakarta"
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-400, -64],
+      "id": "fb-posts-trigger",
+      "name": "Daily FB Posts Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  facebook_page_id,\n  facebook_page_name,\n  page_access_token,\n  priority,\n  max_posts_limit,\n  ('exec_posts_' || EXTRACT(epoch FROM NOW())::bigint) as execution_id,\n  NOW() as started_at\nFROM facebook_pages \nWHERE status = 'active' \n  AND page_access_token IS NOT NULL\nORDER BY priority DESC, processing_order ASC;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-176, -64],
+      "id": "load-active-pages",
+      "name": "Load Active FB Pages",
+      "credentials": {
+        "postgres": {
+          "id": "1Ie6kkHb0btAvyW3",
+          "name": "MULTIMEDIA-POSTGRES"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [48, -64],
+      "id": "split-pages-batches",
+      "name": "Process Pages One by One"
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v19.0/{{ $json.facebook_page_id }}/posts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,message,story,description,created_time,updated_time,type,status_type,permalink_url,picture,full_picture,is_published,is_hidden"
+            },
+            {
+              "name": "limit",
+              "value": "={{ $json.max_posts_limit || 50 }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $json.page_access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [272, -64],
+      "id": "get-fb-posts",
+      "name": "Get FB Posts via Graph API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle Facebook Posts API Response with Pagination\nconst inputData = $input.all();\nconsole.log('Processing Facebook Posts API response');\n\nif (!inputData || inputData.length === 0) {\n    console.error('No input data received from Facebook API');\n    return [{\n        json: {\n            facebook_posts: [],\n            total_posts: 0,\n            page_info: {},\n            error: \"No data received from Facebook API\"\n        }\n    }];\n}\n\nconst apiResponse = inputData[0].json;\nconst pageInfo = inputData[1].json; // From Split in Batches context\n\nconsole.log('Page being processed:', pageInfo.facebook_page_name);\nconsole.log('API response structure:', Object.keys(apiResponse));\n\n// Handle API errors\nif (apiResponse.error) {\n    console.error('Facebook API Error:', apiResponse.error);\n    return [{\n        json: {\n            facebook_posts: [],\n            total_posts: 0,\n            page_info: pageInfo,\n            api_error: apiResponse.error,\n            error: `Facebook API Error: ${apiResponse.error.message}`\n        }\n    }];\n}\n\n// Extract posts data\nlet allPosts = [];\nif (apiResponse.data && Array.isArray(apiResponse.data)) {\n    allPosts = apiResponse.data;\n} else {\n    console.warn('No posts data found in API response');\n}\n\nconsole.log(`Found ${allPosts.length} posts for page: ${pageInfo.facebook_page_name}`);\n\n// Transform posts data for database\nconst transformedPosts = allPosts.map((post, index) => {\n    const transformedPost = {\n        // Post Identity\n        facebook_page_id: pageInfo.facebook_page_id,\n        post_id: post.id,\n        \n        // Content\n        message: post.message || null,\n        story: post.story || null,\n        description: post.description || null,\n        \n        // URLs and Media\n        permalink_url: post.permalink_url || null,\n        picture_url: post.picture || null,\n        full_picture_url: post.full_picture || null,\n        \n        // Post Type and Status\n        type: post.type || null,\n        status_type: post.status_type || null,\n        is_published: post.is_published !== false, // Default to true if not specified\n        is_hidden: post.is_hidden === true, // Default to false if not specified\n        \n        // Timestamps\n        created_time: post.created_time ? new Date(post.created_time).toISOString() : null,\n        updated_time: post.updated_time ? new Date(post.updated_time).toISOString() : null,\n        discovered_at: new Date().toISOString(),\n        \n        // Processing metadata\n        processing_order: index + 1,\n        execution_id: pageInfo.execution_id,\n        page_name: pageInfo.facebook_page_name\n    };\n    \n    console.log(`Transformed post ${index + 1}: ${transformedPost.post_id} (${transformedPost.type})`);\n    return transformedPost;\n});\n\n// Prepare final output\nconst result = {\n    facebook_posts: transformedPosts,\n    total_posts: transformedPosts.length,\n    page_info: {\n        facebook_page_id: pageInfo.facebook_page_id,\n        facebook_page_name: pageInfo.facebook_page_name,\n        priority: pageInfo.priority\n    },\n    processing_summary: `Successfully processed ${transformedPosts.length} posts from ${pageInfo.facebook_page_name}`,\n    execution_id: pageInfo.execution_id,\n    started_at: pageInfo.started_at,\n    processed_at: new Date().toISOString(),\n    \n    // Pagination info (for future enhancement)\n    has_pagination: !!(apiResponse.paging && apiResponse.paging.next),\n    next_page_url: apiResponse.paging?.next || null\n};\n\nconsole.log('Final processing result:');\nconsole.log(`- Posts processed: ${result.total_posts}`);\nconsole.log(`- Page: ${result.page_info.facebook_page_name}`);\nconsole.log(`- Has more pages: ${result.has_pagination}`);\n\nreturn [{ json: result }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [496, -64],
+      "id": "transform-posts-data",
+      "name": "Transform Posts Data"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "facebook_posts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [720, -64],
+      "id": "split-posts-array",
+      "name": "Split Out Posts"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "facebook_posts",
+          "mode": "list",
+          "cachedResultName": "facebook_posts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "facebook_page_id": "={{ $json.facebook_page_id }}",
+            "post_id": "={{ $json.post_id }}",
+            "message": "={{ $json.message }}",
+            "story": "={{ $json.story }}",
+            "description": "={{ $json.description }}",
+            "permalink_url": "={{ $json.permalink_url }}",
+            "picture_url": "={{ $json.picture_url }}",
+            "full_picture_url": "={{ $json.full_picture_url }}",
+            "type": "={{ $json.type }}",
+            "status_type": "={{ $json.status_type }}",
+            "is_published": "={{ $json.is_published }}",
+            "is_hidden": "={{ $json.is_hidden }}",
+            "created_time": "={{ $json.created_time }}",
+            "updated_time": "={{ $json.updated_time }}",
+            "discovered_at": "={{ $json.discovered_at }}"
+          },
+          "matchingColumns": [
+            "post_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "facebook_page_id",
+              "displayName": "facebook_page_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "post_id",
+              "displayName": "post_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "story",
+              "displayName": "story",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "permalink_url",
+              "displayName": "permalink_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "picture_url",
+              "displayName": "picture_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "full_picture_url",
+              "displayName": "full_picture_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status_type",
+              "displayName": "status_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "is_published",
+              "displayName": "is_published",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "is_hidden",
+              "displayName": "is_hidden",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "created_time",
+              "displayName": "created_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "updated_time",
+              "displayName": "updated_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "discovered_at",
+              "displayName": "discovered_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [944, -64],
+      "id": "upsert-facebook-posts",
+      "name": "Upsert Facebook Posts",
+      "credentials": {
+        "postgres": {
+          "id": "1Ie6kkHb0btAvyW3",
+          "name": "MULTIMEDIA-POSTGRES"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Log successful posts collection\nINSERT INTO api_error_logs (\n    api_type,\n    endpoint,\n    account_id,\n    error_code,\n    error_message,\n    request_payload\n) VALUES (\n    'graph_api',\n    'facebook_posts_collection',\n    '{{ $('Load Active FB Pages').first().json.facebook_page_id }}',\n    'SUCCESS',\n    'Facebook posts collected successfully: {{ $json.total_posts || 0 }} posts',\n    '{{ JSON.stringify({ execution_id: $('Load Active FB Pages').first().json.execution_id, page_name: $('Load Active FB Pages').first().json.facebook_page_name }) }}'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1168, -64],
+      "id": "log-collection-success",
+      "name": "Log Collection Success",
+      "credentials": {
+        "postgres": {
+          "id": "1Ie6kkHb0btAvyW3",
+          "name": "MULTIMEDIA-POSTGRES"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily FB Posts Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Active FB Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Active FB Pages": {
+      "main": [
+        [
+          {
+            "node": "Process Pages One by One",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Pages One by One": {
+      "main": [
+        [
+          {
+            "node": "Get FB Posts via Graph API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get FB Posts via Graph API": {
+      "main": [
+        [
+          {
+            "node": "Transform Posts Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Posts Data": {
+      "main": [
+        [
+          {
+            "node": "Split Out Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Posts": {
+      "main": [
+        [
+          {
+            "node": "Upsert Facebook Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Facebook Posts": {
+      "main": [
+        [
+          {
+            "node": "Log Collection Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "multimedia.drwapp",
+      "createdAt": "2025-08-27T09:14:27.812Z",
+      "updatedAt": "2025-08-27T09:14:27.812Z"
+    }
+  ]
+}
