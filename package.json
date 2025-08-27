@@ -1,0 +1,45 @@
+{
+  "name": "mulmed-drwapp",
+  "version": "1.0.0",
+  "description": "Social Media Analytics & Tracking System for Facebook and Instagram",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset --force",
+    "db:seed": "node prisma/seed.js",
+    "test:db": "node scripts/test-connection.js",
+    "build": "node scripts/build.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.4.2",
+    "axios": "^1.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.0.0",
+    "node-cron": "^3.0.2",
+    "winston": "^3.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "prisma": "^5.4.2"
+  },
+  "keywords": [
+    "social-media",
+    "analytics",
+    "facebook",
+    "instagram",
+    "meta-api",
+    "n8n"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

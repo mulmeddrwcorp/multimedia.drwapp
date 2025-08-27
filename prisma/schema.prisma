@@ -1,0 +1,565 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================================================
+// CORE ACCOUNT MODELS
+// ================================================================
+
+model FacebookPage {
+  id                  Int      @id @default(autoincrement())
+  facebookPageId      String   @unique @map("facebook_page_id") @db.VarChar(255)
+  facebookPageName    String?  @map("facebook_page_name") @db.VarChar(255)
+  pageAccessToken     String?  @map("page_access_token") @db.Text
+  pageCategory        String?  @map("page_category") @db.VarChar(100)
+  pageAbout           String?  @map("page_about") @db.Text
+  pageWebsite         String?  @map("page_website") @db.VarChar(500)
+  followersCount      Int      @default(0) @map("followers_count")
+  likesCount          Int      @default(0) @map("likes_count")
+  priority            String   @default("medium") @db.VarChar(50)
+  maxPostsLimit       Int      @default(50) @map("max_posts_limit")
+  processingOrder     Int      @default(0) @map("processing_order")
+  status              String   @default("active") @db.VarChar(50)
+  discoveredAt        DateTime @default(now()) @map("discovered_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  instagramAccounts   InstagramAccount[]
+  facebookPosts       FacebookPost[]
+  facebookPageMetrics FacebookPageMetrics[]
+  adAccounts          AdAccount[]
+  dailySummaries      DailySummary[]
+
+  @@index([facebookPageId])
+  @@index([priority])
+  @@index([status])
+  @@map("facebook_pages")
+}
+
+model InstagramAccount {
+  id                    Int      @id @default(autoincrement())
+  igBusinessAccountId   String   @unique @map("ig_business_account_id") @db.VarChar(255)
+  facebookPageId        String   @map("facebook_page_id") @db.VarChar(255)
+  igUsername            String?  @map("ig_username") @db.VarChar(255)
+  igName                String?  @map("ig_name") @db.VarChar(255)
+  igFollowers           Int      @default(0) @map("ig_followers")
+  igFollowing           Int      @default(0) @map("ig_following")
+  igMediaCount          Int      @default(0) @map("ig_media_count")
+  profilePictureUrl     String?  @map("profile_picture_url") @db.Text
+  biography             String?  @db.Text
+  website               String?  @db.VarChar(500)
+  priority              String   @default("medium") @db.VarChar(50)
+  maxPostsLimit         Int      @default(50) @map("max_posts_limit")
+  processingOrder       Int      @default(0) @map("processing_order")
+  status                String   @default("active") @db.VarChar(50)
+  discoveredAt          DateTime @default(now()) @map("discovered_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  facebookPage            FacebookPage @relation(fields: [facebookPageId], references: [facebookPageId], onDelete: Cascade)
+  instagramMedia          InstagramMedia[]
+  instagramAccountMetrics InstagramAccountMetrics[]
+
+  @@index([igBusinessAccountId])
+  @@index([facebookPageId])
+  @@index([priority])
+  @@index([status])
+  @@map("instagram_accounts")
+}
+
+// ================================================================
+// CONTENT MODELS
+// ================================================================
+
+model FacebookPost {
+  id                   Int      @id @default(autoincrement())
+  facebookPageId       String   @map("facebook_page_id") @db.VarChar(255)
+  postId               String   @unique @map("post_id") @db.VarChar(255)
+  message              String?  @db.Text
+  story                String?  @db.Text
+  description          String?  @db.Text
+  permalinkUrl         String?  @map("permalink_url") @db.Text
+  pictureUrl           String?  @map("picture_url") @db.Text
+  fullPictureUrl       String?  @map("full_picture_url") @db.Text
+  type                 String?  @db.VarChar(50)
+  statusType           String?  @map("status_type") @db.VarChar(50)
+  isPublished          Boolean  @default(true) @map("is_published")
+  isHidden             Boolean  @default(false) @map("is_hidden")
+  createdTime          DateTime? @map("created_time") @db.Timestamptz(6)
+  updatedTime          DateTime? @map("updated_time") @db.Timestamptz(6)
+  discoveredAt         DateTime @default(now()) @map("discovered_at") @db.Timestamptz(6)
+  lastMetricsUpdate    DateTime? @map("last_metrics_update") @db.Timestamptz(6)
+
+  // Relations
+  facebookPage        FacebookPage @relation(fields: [facebookPageId], references: [facebookPageId], onDelete: Cascade)
+  facebookPostMetrics FacebookPostMetrics[]
+
+  @@index([facebookPageId])
+  @@index([createdTime])
+  @@index([type])
+  @@index([isPublished])
+  @@map("facebook_posts")
+}
+
+model InstagramMedia {
+  id                    Int      @id @default(autoincrement())
+  igBusinessAccountId   String   @map("ig_business_account_id") @db.VarChar(255)
+  mediaId               String   @unique @map("media_id") @db.VarChar(255)
+  mediaType             String?  @map("media_type") @db.VarChar(50)
+  mediaProductType      String?  @map("media_product_type") @db.VarChar(50)
+  caption               String?  @db.Text
+  permalink             String?  @db.Text
+  mediaUrl              String?  @map("media_url") @db.Text
+  thumbnailUrl          String?  @map("thumbnail_url") @db.Text
+  likeCount             Int      @default(0) @map("like_count")
+  commentsCount         Int      @default(0) @map("comments_count")
+  isCommentEnabled      Boolean  @default(true) @map("is_comment_enabled")
+  timestamp             DateTime? @db.Timestamptz(6)
+  discoveredAt          DateTime @default(now()) @map("discovered_at") @db.Timestamptz(6)
+  lastMetricsUpdate     DateTime? @map("last_metrics_update") @db.Timestamptz(6)
+
+  // Relations
+  instagramAccount       InstagramAccount @relation(fields: [igBusinessAccountId], references: [igBusinessAccountId], onDelete: Cascade)
+  instagramMediaMetrics  InstagramMediaMetrics[]
+
+  @@index([igBusinessAccountId])
+  @@index([mediaType])
+  @@index([timestamp])
+  @@index([mediaProductType])
+  @@map("instagram_media")
+}
+
+// ================================================================
+// ORGANIC METRICS MODELS
+// ================================================================
+
+model FacebookPageMetrics {
+  id                                Int      @id @default(autoincrement())
+  facebookPageId                    String   @map("facebook_page_id") @db.VarChar(255)
+  metricDate                        DateTime @map("metric_date") @db.Date
+  pageImpressions                   Int      @default(0) @map("page_impressions")
+  pageImpressionsUnique             Int      @default(0) @map("page_impressions_unique")
+  pageImpressionsPaid               Int      @default(0) @map("page_impressions_paid")
+  pageImpressionsOrganic            Int      @default(0) @map("page_impressions_organic")
+  pageViewsTotal                    Int      @default(0) @map("page_views_total")
+  pageViewsUnique                   Int      @default(0) @map("page_views_unique")
+  pageViewsExternalReferrals        Int      @default(0) @map("page_views_external_referrals")
+  pageFans                          Int      @default(0) @map("page_fans")
+  pageFanAdds                       Int      @default(0) @map("page_fan_adds")
+  pageFanAddsUnique                 Int      @default(0) @map("page_fan_adds_unique")
+  pageFanRemoves                    Int      @default(0) @map("page_fan_removes")
+  pageFanRemovesUnique              Int      @default(0) @map("page_fan_removes_unique")
+  pageEngagedUsers                  Int      @default(0) @map("page_engaged_users")
+  pagePostEngagements               Int      @default(0) @map("page_post_engagements")
+  pageConsumptions                  Int      @default(0) @map("page_consumptions")
+  pagePlacesCheckinTotal            Int      @default(0) @map("page_places_checkin_total")
+  pageVideoViews                    Int      @default(0) @map("page_video_views")
+  pageVideoViewsUnique              Int      @default(0) @map("page_video_views_unique")
+  createdAt                         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  facebookPage FacebookPage @relation(fields: [facebookPageId], references: [facebookPageId], onDelete: Cascade)
+
+  @@unique([facebookPageId, metricDate])
+  @@index([metricDate])
+  @@index([facebookPageId])
+  @@map("facebook_page_metrics")
+}
+
+model FacebookPostMetrics {
+  id                      Int      @id @default(autoincrement())
+  postId                  String   @map("post_id") @db.VarChar(255)
+  metricDate              DateTime @map("metric_date") @db.Date
+  impressions             Int      @default(0)
+  impressionsUnique       Int      @default(0) @map("impressions_unique")
+  impressionsPaid         Int      @default(0) @map("impressions_paid")
+  impressionsOrganic      Int      @default(0) @map("impressions_organic")
+  reach                   Int      @default(0)
+  engagement              Int      @default(0)
+  reactionsLike           Int      @default(0) @map("reactions_like")
+  reactionsLove           Int      @default(0) @map("reactions_love")
+  reactionsWow            Int      @default(0) @map("reactions_wow")
+  reactionsHaha           Int      @default(0) @map("reactions_haha")
+  reactionsSorry          Int      @default(0) @map("reactions_sorry")
+  reactionsAnger          Int      @default(0) @map("reactions_anger")
+  comments                Int      @default(0)
+  shares                  Int      @default(0)
+  clicks                  Int      @default(0)
+  clicksUnique            Int      @default(0) @map("clicks_unique")
+  videoViews              Int      @default(0) @map("video_views")
+  videoViewsUnique        Int      @default(0) @map("video_views_unique")
+  videoAvgTimeWatched     Int      @default(0) @map("video_avg_time_watched")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  facebookPost FacebookPost @relation(fields: [postId], references: [postId], onDelete: Cascade)
+
+  @@unique([postId, metricDate])
+  @@index([metricDate])
+  @@index([postId])
+  @@map("facebook_post_metrics")
+}
+
+model InstagramAccountMetrics {
+  id                  Int      @id @default(autoincrement())
+  igBusinessAccountId String   @map("ig_business_account_id") @db.VarChar(255)
+  metricDate          DateTime @map("metric_date") @db.Date
+  impressions         Int      @default(0)
+  reach               Int      @default(0)
+  profileViews        Int      @default(0) @map("profile_views")
+  websiteClicks       Int      @default(0) @map("website_clicks")
+  followerCount       Int      @default(0) @map("follower_count")
+  followerCountChange Int      @default(0) @map("follower_count_change")
+  storyImpressions    Int      @default(0) @map("story_impressions")
+  storyReach          Int      @default(0) @map("story_reach")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  instagramAccount InstagramAccount @relation(fields: [igBusinessAccountId], references: [igBusinessAccountId], onDelete: Cascade)
+
+  @@unique([igBusinessAccountId, metricDate])
+  @@index([metricDate])
+  @@index([igBusinessAccountId])
+  @@map("instagram_account_metrics")
+}
+
+model InstagramMediaMetrics {
+  id           Int      @id @default(autoincrement())
+  mediaId      String   @map("media_id") @db.VarChar(255)
+  metricDate   DateTime @map("metric_date") @db.Date
+  impressions  Int      @default(0)
+  reach        Int      @default(0)
+  engagement   Int      @default(0)
+  likes        Int      @default(0)
+  comments     Int      @default(0)
+  shares       Int      @default(0)
+  saves        Int      @default(0)
+  videoViews   Int      @default(0) @map("video_views")
+  tapsForward  Int      @default(0) @map("taps_forward")
+  tapsBack     Int      @default(0) @map("taps_back")
+  exits        Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  instagramMedia InstagramMedia @relation(fields: [mediaId], references: [mediaId], onDelete: Cascade)
+
+  @@unique([mediaId, metricDate])
+  @@index([metricDate])
+  @@index([mediaId])
+  @@map("instagram_media_metrics")
+}
+
+// ================================================================
+// META ADS MODELS
+// ================================================================
+
+model AdAccount {
+  id                     Int      @id @default(autoincrement())
+  adAccountId            String   @unique @map("ad_account_id") @db.VarChar(255)
+  adAccountName          String?  @map("ad_account_name") @db.VarChar(255)
+  facebookPageId         String?  @map("facebook_page_id") @db.VarChar(255)
+  accountStatus          String?  @map("account_status") @db.VarChar(50)
+  businessId             String?  @map("business_id") @db.VarChar(255)
+  businessName           String?  @map("business_name") @db.VarChar(255)
+  currency               String?  @db.VarChar(10)
+  timezoneName           String?  @map("timezone_name") @db.VarChar(100)
+  timezoneOffsetHoursUtc Int?     @map("timezone_offset_hours_utc")
+  accessToken            String?  @map("access_token") @db.Text
+  capabilities           Json?
+  amountSpent            Decimal  @default(0) @map("amount_spent") @db.Decimal(15, 4)
+  balance                Decimal  @default(0) @db.Decimal(15, 4)
+  spendCap               Decimal? @map("spend_cap") @db.Decimal(15, 4)
+  discoveredAt           DateTime @default(now()) @map("discovered_at") @db.Timestamptz(6)
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  facebookPage FacebookPage? @relation(fields: [facebookPageId], references: [facebookPageId], onDelete: SetNull)
+  campaigns    Campaign[]
+
+  @@index([accountStatus])
+  @@index([facebookPageId])
+  @@map("ad_accounts")
+}
+
+model Campaign {
+  id                    Int      @id @default(autoincrement())
+  adAccountId           String   @map("ad_account_id") @db.VarChar(255)
+  campaignId            String   @unique @map("campaign_id") @db.VarChar(255)
+  campaignName          String?  @map("campaign_name") @db.VarChar(255)
+  objective             String?  @db.VarChar(100)
+  status                String?  @db.VarChar(50)
+  effectiveStatus       String?  @map("effective_status") @db.VarChar(50)
+  budgetRemaining       Decimal? @map("budget_remaining") @db.Decimal(15, 2)
+  dailyBudget           Decimal? @map("daily_budget") @db.Decimal(15, 2)
+  lifetimeBudget        Decimal? @map("lifetime_budget") @db.Decimal(15, 2)
+  budgetRebalanceFlag   Boolean  @default(false) @map("budget_rebalance_flag")
+  bidStrategy           String?  @map("bid_strategy") @db.VarChar(50)
+  buyingType            String?  @map("buying_type") @db.VarChar(50)
+  startTime             DateTime? @map("start_time") @db.Timestamptz(6)
+  stopTime              DateTime? @map("stop_time") @db.Timestamptz(6)
+  createdTime           DateTime? @map("created_time") @db.Timestamptz(6)
+  updatedTime           DateTime? @map("updated_time") @db.Timestamptz(6)
+  discoveredAt          DateTime @default(now()) @map("discovered_at") @db.Timestamptz(6)
+  lastMetricsUpdate     DateTime? @map("last_metrics_update") @db.Timestamptz(6)
+
+  // Relations
+  adAccount        AdAccount @relation(fields: [adAccountId], references: [adAccountId], onDelete: Cascade)
+  adSets           AdSet[]
+  campaignMetrics  CampaignMetrics[]
+
+  @@index([adAccountId])
+  @@index([status])
+  @@index([objective])
+  @@index([createdTime])
+  @@map("campaigns")
+}
+
+model AdSet {
+  id                 Int      @id @default(autoincrement())
+  campaignId         String   @map("campaign_id") @db.VarChar(255)
+  adsetId            String   @unique @map("adset_id") @db.VarChar(255)
+  adsetName          String?  @map("adset_name") @db.VarChar(255)
+  optimizationGoal   String?  @map("optimization_goal") @db.VarChar(100)
+  billingEvent       String?  @map("billing_event") @db.VarChar(50)
+  bidAmount          Decimal? @map("bid_amount") @db.Decimal(15, 4)
+  bidStrategy        String?  @map("bid_strategy") @db.VarChar(50)
+  dailyBudget        Decimal? @map("daily_budget") @db.Decimal(15, 2)
+  lifetimeBudget     Decimal? @map("lifetime_budget") @db.Decimal(15, 2)
+  budgetRemaining    Decimal? @map("budget_remaining") @db.Decimal(15, 2)
+  status             String?  @db.VarChar(50)
+  effectiveStatus    String?  @map("effective_status") @db.VarChar(50)
+  targeting          Json?
+  startTime          DateTime? @map("start_time") @db.Timestamptz(6)
+  endTime            DateTime? @map("end_time") @db.Timestamptz(6)
+  createdTime        DateTime? @map("created_time") @db.Timestamptz(6)
+  updatedTime        DateTime? @map("updated_time") @db.Timestamptz(6)
+  discoveredAt       DateTime @default(now()) @map("discovered_at") @db.Timestamptz(6)
+  lastMetricsUpdate  DateTime? @map("last_metrics_update") @db.Timestamptz(6)
+
+  // Relations
+  campaign       Campaign @relation(fields: [campaignId], references: [campaignId], onDelete: Cascade)
+  ads            Ad[]
+  adsetMetrics   AdsetMetrics[]
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([optimizationGoal])
+  @@map("ad_sets")
+}
+
+model Ad {
+  id                Int      @id @default(autoincrement())
+  adsetId           String   @map("adset_id") @db.VarChar(255)
+  adId              String   @unique @map("ad_id") @db.VarChar(255)
+  adName            String?  @map("ad_name") @db.VarChar(255)
+  status            String?  @db.VarChar(50)
+  effectiveStatus   String?  @map("effective_status") @db.VarChar(50)
+  creativeId        String?  @map("creative_id") @db.VarChar(255)
+  creativeName      String?  @map("creative_name") @db.VarChar(255)
+  createdTime       DateTime? @map("created_time") @db.Timestamptz(6)
+  updatedTime       DateTime? @map("updated_time") @db.Timestamptz(6)
+  discoveredAt      DateTime @default(now()) @map("discovered_at") @db.Timestamptz(6)
+  lastMetricsUpdate DateTime? @map("last_metrics_update") @db.Timestamptz(6)
+
+  // Relations
+  adSet      AdSet @relation(fields: [adsetId], references: [adsetId], onDelete: Cascade)
+  adMetrics  AdMetrics[]
+
+  @@index([adsetId])
+  @@index([status])
+  @@index([creativeId])
+  @@map("ads")
+}
+
+// ================================================================
+// ADS METRICS MODELS
+// ================================================================
+
+model CampaignMetrics {
+  id                          Int      @id @default(autoincrement())
+  campaignId                  String   @map("campaign_id") @db.VarChar(255)
+  metricDate                  DateTime @map("metric_date") @db.Date
+  impressions                 Int      @default(0)
+  reach                       Int      @default(0)
+  clicks                      Int      @default(0)
+  uniqueClicks                Int      @default(0) @map("unique_clicks")
+  spend                       Decimal  @default(0) @db.Decimal(15, 4)
+  cpm                         Decimal  @default(0) @db.Decimal(15, 4)
+  cpc                         Decimal  @default(0) @db.Decimal(15, 4)
+  cpp                         Decimal  @default(0) @db.Decimal(15, 4)
+  ctr                         Decimal  @default(0) @db.Decimal(8, 4)
+  frequency                   Decimal  @default(0) @db.Decimal(8, 4)
+  conversions                 Int      @default(0)
+  conversionRate              Decimal  @default(0) @map("conversion_rate") @db.Decimal(8, 4)
+  conversionValue             Decimal  @default(0) @map("conversion_value") @db.Decimal(15, 4)
+  costPerConversion           Decimal  @default(0) @map("cost_per_conversion") @db.Decimal(15, 4)
+  videoViews                  Int      @default(0) @map("video_views")
+  videoAvgTimeWatchedActions  Int      @default(0) @map("video_avg_time_watched_actions")
+  linkClicks                  Int      @default(0) @map("link_clicks")
+  outboundClicks              Int      @default(0) @map("outbound_clicks")
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  campaign Campaign @relation(fields: [campaignId], references: [campaignId], onDelete: Cascade)
+
+  @@unique([campaignId, metricDate])
+  @@index([metricDate])
+  @@index([campaignId])
+  @@map("campaign_metrics")
+}
+
+model AdsetMetrics {
+  id                Int      @id @default(autoincrement())
+  adsetId           String   @map("adset_id") @db.VarChar(255)
+  metricDate        DateTime @map("metric_date") @db.Date
+  impressions       Int      @default(0)
+  reach             Int      @default(0)
+  clicks            Int      @default(0)
+  uniqueClicks      Int      @default(0) @map("unique_clicks")
+  spend             Decimal  @default(0) @db.Decimal(15, 4)
+  cpm               Decimal  @default(0) @db.Decimal(15, 4)
+  cpc               Decimal  @default(0) @db.Decimal(15, 4)
+  cpp               Decimal  @default(0) @db.Decimal(15, 4)
+  ctr               Decimal  @default(0) @db.Decimal(8, 4)
+  frequency         Decimal  @default(0) @db.Decimal(8, 4)
+  conversions       Int      @default(0)
+  conversionRate    Decimal  @default(0) @map("conversion_rate") @db.Decimal(8, 4)
+  conversionValue   Decimal  @default(0) @map("conversion_value") @db.Decimal(15, 4)
+  costPerConversion Decimal  @default(0) @map("cost_per_conversion") @db.Decimal(15, 4)
+  videoViews        Int      @default(0) @map("video_views")
+  linkClicks        Int      @default(0) @map("link_clicks")
+  outboundClicks    Int      @default(0) @map("outbound_clicks")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  adSet AdSet @relation(fields: [adsetId], references: [adsetId], onDelete: Cascade)
+
+  @@unique([adsetId, metricDate])
+  @@index([metricDate])
+  @@index([adsetId])
+  @@map("adset_metrics")
+}
+
+model AdMetrics {
+  id                          Int      @id @default(autoincrement())
+  adId                        String   @map("ad_id") @db.VarChar(255)
+  metricDate                  DateTime @map("metric_date") @db.Date
+  impressions                 Int      @default(0)
+  reach                       Int      @default(0)
+  clicks                      Int      @default(0)
+  uniqueClicks                Int      @default(0) @map("unique_clicks")
+  spend                       Decimal  @default(0) @db.Decimal(15, 4)
+  cpm                         Decimal  @default(0) @db.Decimal(15, 4)
+  cpc                         Decimal  @default(0) @db.Decimal(15, 4)
+  cpp                         Decimal  @default(0) @db.Decimal(15, 4)
+  ctr                         Decimal  @default(0) @db.Decimal(8, 4)
+  frequency                   Decimal  @default(0) @db.Decimal(8, 4)
+  conversions                 Int      @default(0)
+  conversionRate              Decimal  @default(0) @map("conversion_rate") @db.Decimal(8, 4)
+  conversionValue             Decimal  @default(0) @map("conversion_value") @db.Decimal(15, 4)
+  costPerConversion           Decimal  @default(0) @map("cost_per_conversion") @db.Decimal(15, 4)
+  videoViews                  Int      @default(0) @map("video_views")
+  videoAvgTimeWatchedActions  Int      @default(0) @map("video_avg_time_watched_actions")
+  linkClicks                  Int      @default(0) @map("link_clicks")
+  outboundClicks              Int      @default(0) @map("outbound_clicks")
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  ad Ad @relation(fields: [adId], references: [adId], onDelete: Cascade)
+
+  @@unique([adId, metricDate])
+  @@index([metricDate])
+  @@index([adId])
+  @@map("ad_metrics")
+}
+
+// ================================================================
+// SUMMARY & UTILITY MODELS
+// ================================================================
+
+model DailySummary {
+  id                       Int      @id @default(autoincrement())
+  facebookPageId           String   @map("facebook_page_id") @db.VarChar(255)
+  metricDate               DateTime @map("metric_date") @db.Date
+  organicImpressions       Int      @default(0) @map("organic_impressions")
+  organicReach             Int      @default(0) @map("organic_reach")
+  organicEngagement        Int      @default(0) @map("organic_engagement")
+  organicVideoViews        Int      @default(0) @map("organic_video_views")
+  instagramImpressions     Int      @default(0) @map("instagram_impressions")
+  instagramReach           Int      @default(0) @map("instagram_reach")
+  instagramEngagement      Int      @default(0) @map("instagram_engagement")
+  paidImpressions          Int      @default(0) @map("paid_impressions")
+  paidReach                Int      @default(0) @map("paid_reach")
+  paidClicks               Int      @default(0) @map("paid_clicks")
+  paidVideoViews           Int      @default(0) @map("paid_video_views")
+  totalSpend               Decimal  @default(0) @map("total_spend") @db.Decimal(15, 4)
+  totalImpressions         Int      @default(0) @map("total_impressions")
+  totalReach               Int      @default(0) @map("total_reach")
+  totalEngagement          Int      @default(0) @map("total_engagement")
+  organicEngagementRate    Decimal  @default(0) @map("organic_engagement_rate") @db.Decimal(8, 4)
+  paidCtr                  Decimal  @default(0) @map("paid_ctr") @db.Decimal(8, 4)
+  blendedEngagementRate    Decimal  @default(0) @map("blended_engagement_rate") @db.Decimal(8, 4)
+  costPerImpression        Decimal  @default(0) @map("cost_per_impression") @db.Decimal(15, 6)
+  costPerEngagement        Decimal  @default(0) @map("cost_per_engagement") @db.Decimal(15, 6)
+  roas                     Decimal  @default(0) @db.Decimal(8, 4)
+  roi                      Decimal  @default(0) @db.Decimal(8, 4)
+  organicVsPaidRatio       Decimal  @default(0) @map("organic_vs_paid_ratio") @db.Decimal(8, 4)
+  reachEfficiency          Decimal  @default(0) @map("reach_efficiency") @db.Decimal(8, 4)
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  facebookPage FacebookPage @relation(fields: [facebookPageId], references: [facebookPageId], onDelete: Cascade)
+
+  @@unique([facebookPageId, metricDate])
+  @@index([metricDate])
+  @@index([facebookPageId])
+  @@map("daily_summary")
+}
+
+model ApiRateLimit {
+  id             Int      @id @default(autoincrement())
+  apiType        String   @map("api_type") @db.VarChar(50)
+  endpoint       String   @db.VarChar(255)
+  accountId      String   @map("account_id") @db.VarChar(255)
+  callsMade      Int      @default(0) @map("calls_made")
+  callsRemaining Int      @default(0) @map("calls_remaining")
+  resetTime      DateTime @map("reset_time") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([apiType])
+  @@index([accountId])
+  @@map("api_rate_limits")
+}
+
+model ApiErrorLog {
+  id              Int      @id @default(autoincrement())
+  apiType         String   @map("api_type") @db.VarChar(50)
+  endpoint        String   @db.VarChar(255)
+  accountId       String   @map("account_id") @db.VarChar(255)
+  errorCode       String   @map("error_code") @db.VarChar(50)
+  errorMessage    String   @map("error_message") @db.Text
+  requestPayload  Json?    @map("request_payload")
+  responsePayload Json?    @map("response_payload")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([apiType])
+  @@index([errorCode])
+  @@index([createdAt])
+  @@map("api_error_logs")
+}
