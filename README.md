@@ -228,4 +228,6 @@ For support and questions:
 
 ---
 
+---
+
 **Built with ❤️ for comprehensive social media analytics**
